@@ -14,7 +14,7 @@ const registerUser = asynchandler(async (req, res) => {
   }
 
   //checking user is already exist or not
-  const existedUser = User.findOne({
+  const existedUser = await User.findOne({
     $or: [{ userName }, { email }], //checking the user with email or username
   });
   if (existedUser) {
@@ -29,9 +29,8 @@ const registerUser = asynchandler(async (req, res) => {
   }
 
   const avatar = await uploadOnCloudinary(avatarLocalPath);
-  if (coverImageLocalPath) {
-    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
-  }
+  const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+
   //checking avatar upload on cloudiary or not
   if (!avatar) {
     throw new ApiError(400, "Avatar upload on cloudinary failed");
@@ -58,7 +57,7 @@ const registerUser = asynchandler(async (req, res) => {
 
   //now if everything is fine then return the response
   return res
-    .Status(201)
+    .status(201)
     .json(new ApiResponse(200, createdUser, "User registered Successfully"));
 });
 
