@@ -22,7 +22,15 @@ const registerUser = asynchandler(async (req, res) => {
   }
   //checking files
   const avatarLocalPath = req.files?.avatar[0]?.path; //checking the file is uploaded and seeing its localpath exist or not
-  const coverImageLocalPath = req.files?.coverImage[0]?.path;
+  //checking cover image is present or not
+  let coverImageLocalPath;
+  if (
+    req.files &&
+    Array.isArray(req.files.coverImage) &&
+    req.files.coverImage.length > 0
+  ) {
+    coverImageLocalPath = req.files.coverImage[0].path;
+  }
   //checking the avatar file exist or not
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar is required");
@@ -35,7 +43,6 @@ const registerUser = asynchandler(async (req, res) => {
   if (!avatar) {
     throw new ApiError(400, "Avatar upload on cloudinary failed");
   }
-
   const mongoResponse = await User.create({
     //User is  model from user model which can query to db
     fullname,
