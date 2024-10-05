@@ -11,7 +11,7 @@ const generateAccessAndRefreshToken = async (userId) => {
     const refreshToken = userDoc.generateRefreshToken();
     userDoc.refreshTokens = refreshToken;
     await userDoc.save({ validateBeforeSave: false }); //saving the refresh token without invoking the mongoose checking of required feilds
-    return accessToken, refreshToken;
+    return { accessToken, refreshToken };
   } catch (error) {
     throw new ApiError(
       500,
@@ -70,7 +70,7 @@ const registerUser = asynchandler(async (req, res) => {
   }); //after creating the user the mongo db return all the data which is saved
   //checking user is created or not with finding with id
   const createdUser = await User.findById(mongoResponse._id).select(
-    "-password -refreshToken", //deselecting two feilds so they are not returned to frontend
+    "-password -refreshTokens", //deselecting two feilds so they are not returned to frontend
   );
 
   //now checking the user is created or not
@@ -86,21 +86,21 @@ const registerUser = asynchandler(async (req, res) => {
 
 const loginUser = asynchandler(async (req, res) => {
   //req body -> data
-  const { email, username, password } = req.body;
+  const { email, userName, password } = req.body;
   //user name or email
-  if (!username || !email) {
+  if (!(userName || email)) {
     throw new ApiError(400, "username or password is required");
   }
   //find the user
   const findUser = await User.findOne({
-    $or: [{ username }, { email }],
+    $or: [{ userName }, { email }],
   });
   if (!findUser) {
     throw new ApiError(404, "User does not exist");
   }
 
   //check the password
-  const isPasswordValid = await User.isPasswordCorrect(password);
+  const isPasswordValid = await findUser.isPasswordCorrect(password);
   if (!isPasswordValid) {
     throw new ApiError(401, "Password is Invalid");
   }
@@ -112,9 +112,8 @@ const loginUser = asynchandler(async (req, res) => {
 
   //sending them to cookie of user
   const loggedInuser = await User.findOne(findUser._id).select(
-    "-password -refreshToken",
+    "-password -refreshTokens",
   );
-
   const options = {
     httpOnly: true,
     secure: true, //sending cookie securly
