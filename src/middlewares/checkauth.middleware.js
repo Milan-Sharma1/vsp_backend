@@ -19,7 +19,7 @@ export const verifyJWT = asynchandler(async (req, _, next) => {
     );
 
     const user = await User.findById(decodedToken?._id).select(
-      "-password -refreshTokens",
+      "-password -refreshTokens -cloudinaryPublicId",
     );
 
     if (!user) {
