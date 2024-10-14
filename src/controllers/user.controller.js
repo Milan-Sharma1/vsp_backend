@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import { deleteOnCloudinary, uploadOnCloudinary } from "../utils/Cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import mongoose from "mongoose";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -301,14 +302,27 @@ const updateUsercoverImage = asynchandler(async (req, res) => {
   if (!coverImage.url) {
     throw new ApiError(500, "Upload Failed on server");
   }
-
+  //deleting old coverImg
+  const oldCovImgPublicId = await User.findById(req.user?._id);
+  if (!oldCovImgPublicId) {
+    throw new ApiError(505, "old oldCovImg fetch fail");
+  }
+  const response = await deleteOnCloudinary(
+    oldCovImgPublicId.cloudinaryPublicId[1],
+  );
+  if (!response) {
+    throw new ApiError(500, "Old covImg delete failed on cloudinary");
+  }
   const user = await User.findByIdAndUpdate(
     req.user?._id,
     {
-      $set: { coverImage: coverImage.url },
+      $set: {
+        coverImage: coverImage.url,
+        "cloudinaryPublicId.1": coverImage.public_id,
+      },
     },
     { new: true },
-  ).select("-password");
+  ).select("-password -cloudinaryPublicId");
 
   if (!user) {
     throw new ApiError(500, "Error saving data on mongo");
@@ -319,7 +333,7 @@ const updateUsercoverImage = asynchandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Cover image update success"));
 });
 
-const getUserProfile = asynchandler(async (req, res) => {
+const getUserChannelProfile = asynchandler(async (req, res) => {
   const { userName } = req.params;
   if (!userName.trim()) {
     throw new ApiError(400, "userName is missing");
@@ -387,6 +401,60 @@ const getUserProfile = asynchandler(async (req, res) => {
     );
 });
 
+const getWatchHistory = asynchandler(async (req, res) => {
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(String(req.user?._id)),
+      },
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        pipeline: [
+          // the video model has owner field so we are using sub pipline after the lookup field
+          {
+            // so that we can correctly fetch video with its owner
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner", //the lookup will select whole user model so
+              pipeline: [
+                //we are using project as another subpipline to select only neccessary field
+                {
+                  $project: {
+                    userName: 1,
+                    fullname: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            //after the result of second lookup we get value in an array on its first or zero index
+            $addFields: {
+              // so we are further using add field operator to overwrite the owner field
+              owner: {
+                $first: "$owner", // we are accessing the first field of the array using first operator in mongo
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, user[0].watchHistory, "Watch History Fetch Success"),
+    );
+});
 export {
   registerUser,
   loginUser,
@@ -397,5 +465,6 @@ export {
   updateUserInfo,
   updateUserAvatar,
   updateUsercoverImage,
-  getUserProfile,
+  getUserChannelProfile,
+  getWatchHistory,
 };
